@@ -1,0 +1,5 @@
+# Local development records.
+/Docs~/Validation/
+/Docs~/Experiments/
+__pycache__/
+*.pyc

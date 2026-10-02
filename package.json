@@ -1,0 +1,16 @@
+{
+  "name": "net.32ba.soft-deform-pb",
+  "displayName": "Soft Deform PB",
+  "version": "0.0.1",
+  "unity": "2022.3",
+  "description": "An NDMF plugin that adds gravity-aware soft squash and stretch response to VRChat avatar breast bones.",
+  "author": {
+    "name": "32ba"
+  },
+  "license": "MIT",
+  "vpmDependencies": {
+    "com.vrchat.avatars": ">=3.10.4 <4.0.0",
+    "nadena.dev.ndmf": ">=1.14.8 <2.0.0-a",
+    "nadena.dev.modular-avatar": ">=1.18.7 <2.0.0-a"
+  }
+}

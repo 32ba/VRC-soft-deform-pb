@@ -1,0 +1,28 @@
+{
+  "name": "SoftDeformPB.Editor",
+  "rootNamespace": "SoftDeformPB.Editor",
+  "references": [
+    "SoftDeformPB.Runtime",
+    "nadena.dev.ndmf",
+    "nadena.dev.modular-avatar.core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "System.Collections.Immutable.dll",
+    "VRCSDKBase.dll",
+    "VRCSDK3A.dll",
+    "VRC.Dynamics.dll",
+    "VRC.SDK3.Dynamics.PhysBone.dll",
+    "VRC.SDK3.Dynamics.Constraint.dll",
+    "VRC.SDK3.Dynamics.Contact.dll"
+  ],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

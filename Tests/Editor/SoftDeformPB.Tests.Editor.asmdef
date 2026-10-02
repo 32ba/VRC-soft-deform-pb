@@ -1,0 +1,33 @@
+{
+  "name": "SoftDeformPB.Tests.Editor",
+  "rootNamespace": "SoftDeformPB.Tests.Editor",
+  "references": [
+    "SoftDeformPB.Editor",
+    "SoftDeformPB.Runtime",
+    "nadena.dev.ndmf",
+    "nadena.dev.modular-avatar.core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "VRCSDKBase.dll",
+    "VRCSDK3A.dll",
+    "VRC.Dynamics.dll",
+    "VRC.SDK3.Dynamics.PhysBone.dll",
+    "VRC.SDK3.Dynamics.Constraint.dll",
+    "VRC.SDK3.Dynamics.Contact.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
