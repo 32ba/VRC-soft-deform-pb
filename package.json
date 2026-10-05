@@ -5,7 +5,9 @@
   "unity": "2022.3",
   "description": "An NDMF plugin that adds gravity-aware soft squash and stretch response to VRChat avatar breast bones.",
   "author": {
-    "name": "32ba"
+    "name": "32ba",
+    "email": "dev@32ba.net",
+    "url": "https://32ba.net"
   },
   "license": "MIT",
   "vpmDependencies": {

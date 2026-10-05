@@ -1,0 +1,161 @@
+name: Build release
+run-name: ${{ inputs.operation }} release (${{ github.ref_name }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Validate artifacts, publish a release, or retry the VPM update
+        type: choice
+        required: true
+        default: validate
+        options:
+          - validate
+          - publish
+          - update-vpm
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  VPM_REPOSITORY: 32ba/vpm.32ba.net
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require the default branch when publishing
+        if: inputs.operation != 'validate'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo '::error::Publish releases from the default branch.'
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Test release packaging
+        run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
+
+      - name: Read package version
+        id: package
+        run: python .github/scripts/build_release.py --repository "$GITHUB_REPOSITORY" --metadata-only
+
+      - name: Build release artifacts
+        if: inputs.operation != 'update-vpm'
+        run: python .github/scripts/build_release.py --repository "$GITHUB_REPOSITORY"
+
+      - name: Check VPM credentials
+        id: credentials
+        env:
+          APP_ID: ${{ secrets.VPM_MANAGEMENT_GITHUB_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.VPM_MANAGEMENT_GITHUB_APP_PRIVATE_KEY }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          if [[ -z "$APP_ID" || -z "$APP_PRIVATE_KEY" ]]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::Share the existing VPM_MANAGEMENT_GITHUB_APP_ID and VPM_MANAGEMENT_GITHUB_APP_PRIVATE_KEY organization secrets with this repository.'
+            if [[ "$OPERATION" != 'validate' ]]; then
+              echo '::error::VPM credentials are required before publishing.'
+              exit 1
+            fi
+          else
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create a token for the VPM repository
+        if: steps.credentials.outputs.available == 'true'
+        id: vpm-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.VPM_MANAGEMENT_GITHUB_APP_ID }}
+          private-key: ${{ secrets.VPM_MANAGEMENT_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: vpm.32ba.net
+          permission-contents: write
+
+      - name: Check VPM connection
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ steps.vpm-token.outputs.token }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          PACKAGE_NAME: ${{ steps.package.outputs.package_name }}
+        run: |
+          python .github/scripts/update_vpm.py --listing-repository "$VPM_REPOSITORY" \
+            --package-repository "$GITHUB_REPOSITORY" --version "$PACKAGE_VERSION" \
+            --package-name "$PACKAGE_NAME" --check
+
+      - name: Upload release artifacts
+        if: inputs.operation != 'update-vpm'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ steps.package.outputs.version }}
+          path: Artifacts~/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Reject an existing version tag
+        if: inputs.operation == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          git ls-remote --tags origin > "$RUNNER_TEMP/package-tags"
+          if awk -v tag="refs/tags/$PACKAGE_VERSION" '$2 == tag { found = 1 } END { exit !found }' "$RUNNER_TEMP/package-tags"; then
+            echo "::error::Tag $PACKAGE_VERSION already exists. Bump package.json before releasing."
+            exit 1
+          fi
+
+      - name: Publish GitHub release
+        if: inputs.operation == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          DISPLAY_NAME: ${{ steps.package.outputs.display_name }}
+          IS_PRERELEASE: ${{ steps.package.outputs.prerelease }}
+        run: |
+          flags=()
+          if [[ "$IS_PRERELEASE" == 'true' ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$PACKAGE_VERSION" Artifacts~/* \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$DISPLAY_NAME $PACKAGE_VERSION" --generate-notes "${flags[@]}"
+
+      - name: Update VPM listing
+        if: inputs.operation != 'validate'
+        env:
+          GH_TOKEN: ${{ steps.vpm-token.outputs.token }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          PACKAGE_NAME: ${{ steps.package.outputs.package_name }}
+        run: |
+          python .github/scripts/update_vpm.py --listing-repository "$VPM_REPOSITORY" \
+            --package-repository "$GITHUB_REPOSITORY" --version "$PACKAGE_VERSION" \
+            --package-name "$PACKAGE_NAME"
+
+      - name: Write summary
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          OPERATION: ${{ inputs.operation }}
+          VPM_CREDENTIALS: ${{ steps.credentials.outputs.available }}
+        run: |
+          {
+            echo "Version: $PACKAGE_VERSION"
+            echo "Operation: $OPERATION"
+            echo "VPM credentials available: $VPM_CREDENTIALS"
+          } >> "$GITHUB_STEP_SUMMARY"
