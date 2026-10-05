@@ -3,6 +3,7 @@
 import argparse
 import base64
 import json
+import os
 import re
 import subprocess
 from urllib.parse import quote
@@ -17,6 +18,9 @@ class ApiError(RuntimeError):
 
 
 class GitHub:
+    def __init__(self, token=None):
+        self.token = token
+
     def request(self, method, endpoint, data=None):
         arguments = ["gh", "api", endpoint, "--method", method]
         if data is not None:
@@ -24,6 +28,7 @@ class GitHub:
         result = subprocess.run(
             arguments, input=json.dumps(data) if data is not None else None,
             text=True, capture_output=True, check=False,
+            env={**os.environ, "GH_TOKEN": self.token} if self.token else None,
         )
         if result.returncode:
             match = re.search(r"HTTP (\d+)", result.stderr)
@@ -31,7 +36,7 @@ class GitHub:
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
-def update_listing(api, listing_repository, package_repository, version, package_name, check=False):
+def update_listing(api, listing_repository, package_repository, version, package_name, check=False, package_api=None):
     for repository in (listing_repository, package_repository):
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
             raise ValueError("Repository names must have the form owner/name")
@@ -40,7 +45,9 @@ def update_listing(api, listing_repository, package_repository, version, package
     if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", package_name):
         raise ValueError("A valid package name is required")
     if not check:
-        release = api.request("GET", f"repos/{package_repository}/releases/tags/{quote(version, safe='')}")
+        release = (package_api or api).request(
+            "GET", f"repos/{package_repository}/releases/tags/{quote(version, safe='')}"
+        )
         zip_name = f"{package_name}-{version}.zip"
         if release.get("draft") or not any(
             asset.get("name") == zip_name and asset.get("state") == "uploaded"
@@ -91,9 +98,13 @@ def main():
     parser.add_argument("--package-name", required=True)
     parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args()
+    package_token = os.environ.get("PACKAGE_GITHUB_TOKEN")
+    if not arguments.check and not package_token:
+        parser.error("PACKAGE_GITHUB_TOKEN is required to verify the package release")
     result = update_listing(
         GitHub(), arguments.listing_repository, arguments.package_repository,
         arguments.version, arguments.package_name, arguments.check,
+        GitHub(package_token) if package_token else None,
     )
     print(json.dumps(result, indent=2))
 

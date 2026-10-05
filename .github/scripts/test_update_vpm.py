@@ -2,6 +2,7 @@ import base64
 import copy
 import json
 import unittest
+from unittest.mock import Mock
 
 from update_vpm import ApiError, update_listing
 
@@ -64,6 +65,20 @@ class VPMUpdateTests(unittest.TestCase):
         self.assertFalse(api.writes)
         self.assertEqual([{"event_type": "update-listing", "client_payload": {}}], api.notifications)
         self.assertEqual("repository_dispatch", result["notification"])
+
+    def test_package_verification_uses_its_own_scoped_client(self):
+        api = ListingAPI(registered=True)
+        package_api = Mock()
+        package_api.request.return_value = copy.deepcopy(api.release)
+        api.release = {"draft": True, "assets": []}
+        update_listing(
+            api, LISTING_REPOSITORY, PACKAGE_REPOSITORY, "0.0.1", PACKAGE_NAME,
+            package_api=package_api,
+        )
+        package_api.request.assert_called_once_with(
+            "GET", f"repos/{PACKAGE_REPOSITORY}/releases/tags/0.0.1",
+        )
+        self.assertEqual(1, len(api.notifications))
 
     def test_dry_run_has_no_writes_or_notifications(self):
         api = ListingAPI()

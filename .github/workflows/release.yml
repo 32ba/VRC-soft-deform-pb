@@ -141,6 +141,7 @@ jobs:
         if: inputs.operation != 'validate'
         env:
           GH_TOKEN: ${{ steps.vpm-token.outputs.token }}
+          PACKAGE_GITHUB_TOKEN: ${{ github.token }}
           PACKAGE_VERSION: ${{ steps.package.outputs.version }}
           PACKAGE_NAME: ${{ steps.package.outputs.package_name }}
         run: |
